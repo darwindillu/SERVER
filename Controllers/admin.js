@@ -170,7 +170,6 @@ const getSpecificData= async(req,res)=>{
       }
 
   } catch(error) {
-      console.log(error);
       res.status(500).json({message:'Internal server error'})
   }
 }
@@ -182,9 +181,7 @@ const restaurantAccept = async(req,res)=>{
     await restaurantCollection.updateOne({_id:id},{signupStatus:'accepted'})
     res.status(200).json({message:'Restaurant accepted successfully'})
 
-  } catch (error) {
-    
-    console.log(error);
+  } catch (error) {    
     res.status(500).json({message:'Internal server error'})
   }
 }
@@ -196,9 +193,7 @@ const restaurantReject = async(req,res)=>{
     await restaurantCollection.updateOne({_id:id},{$set:{signupStatus:'rejected'},$unset:{isBlocked:''}})
     res.status(200).json({message:'Restaurant accepted successfully'})
 
-  } catch (error) {
-    
-    console.log(error);
+  } catch (error) {    
     res.status(500).json({message:'Internal server error'})
   }
 }

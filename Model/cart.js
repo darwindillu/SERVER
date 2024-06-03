@@ -1,7 +1,11 @@
 const mongoose = require('mongoose')
 
 const cartSchema = mongoose.Schema({
-
+    
+    menuId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'menu'
+    },
     itemName:{
         type:String
     },
@@ -38,6 +42,10 @@ const cartSchema = mongoose.Schema({
     },
     grandPrice:{
         type:Number,
+    },
+    restId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'rest'
     }
 })
 

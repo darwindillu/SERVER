@@ -2,6 +2,9 @@ const restaurantCollection = require('../Model/restaurantSchema')
 const jwt = require('jsonwebtoken')
 const menuCollection = require('../Model/menuItems')
 const agentCollection = require('../Model/agentSchema')
+const orderCollection = require('../Model/orderSchema')
+const mongoose = require('mongoose')
+const userCollection = require('../Model/userSchema')
 
 const getName= async(req,res)=>{
 
@@ -146,7 +149,6 @@ const editMenu = async(req,res)=>{
         )
 
         const menus = await menuCollection.findById(menuId)
-        console.log(menus);
 
         res.status(200).json({message:'Menu edited successfully'})
     } catch (error) {
@@ -155,5 +157,207 @@ const editMenu = async(req,res)=>{
     }
 }
 
+const getOrders = async (req, res) => {
+    try {
+        const { id } = req.body;
 
-module.exports = restaurantController = {getName,getData,editData,editImage,addMenu,getLocation,getAgents,getMenu,editMenu}
+        const filteredItems = await orderCollection.aggregate([
+            { $match: { "items.restId": new mongoose.Types.ObjectId(id) } },
+            { $sort: { 'items.orderDate': -1 } },
+            {
+                $group: {
+                    _id: "$_id",
+                    userId: { $first: "$userId" },
+                    items: { $push: "$items" },
+                    orderTotal: { $first: "$orderTotal" },
+                    paymentMethod: { $first: "$paymentMethod" },
+                    addressId: { $first: "$addressId" },
+                    status:{$first:'$status'},
+                    orderDate: { $first: "$orderDate" }
+                }
+            }
+        ]);
+
+        res.status(200).json({ message: 'Orders fetched successfully', orderLists: filteredItems });
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+
+const updateReason = async (req, res) => {
+    try {
+      const {  orderId, reason } = req.body;
+  
+      const order = await orderCollection.findOne({ _id: orderId });
+  
+      if (!order) {
+        return res.status(404).json({ message: 'Order not found' });
+      }
+  
+      if (!order.items || order.items.length === 0) {
+        return res.status(400).json({ message: 'Order does not have any items' });
+      }
+  
+      order.rejectedReason = reason;
+      order.status = 'rejected'
+  
+      await order.save();
+  
+      res.status(200).json({ message: 'Order reason updated successfully' });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+const acceptOrder = async (req, res) => {
+    try {
+      const { orderId } = req.body;
+  
+      const order = await orderCollection.findOne({ _id: orderId });
+  
+      if (!order) {
+        return res.status(404).json({ message: 'Order not found' });
+      }
+  
+      if (!order.items || order.items.length === 0) {
+        return res.status(400).json({ message: 'Order does not have any items' });
+      }
+
+      order.status = 'preparing'
+  
+      await order.save();
+  
+      res.status(200).json({ message: 'Order reason updated successfully' });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+const pickUp = async(req,res)=>{
+    try {
+        
+        const { orderId } = req.body;
+  
+      const order = await orderCollection.findOne({ _id: orderId });
+  
+      if (!order) {
+        return res.status(404).json({ message: 'Order not found' });
+      }
+  
+      if (!order.items || order.items.length === 0) {
+        return res.status(400).json({ message: 'Order does not have any items' });
+      }
+  
+      order.status = 'ready to pick'
+  
+      await order.save();
+  
+      res.status(200).json({ message: 'Order reason updated successfully' });
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+const filterOrders = async (req, res) => {
+    try {
+        const { value, restId } = req.body;
+
+        const filteredItems = await orderCollection.aggregate([
+            { $match: { "items.restId": new mongoose.Types.ObjectId(restId), "status":value } },
+            { $sort: { 'items.orderDate': -1 } },
+            {
+                $group: {
+                    _id: "$_id",
+                    userId: { $first: "$userId" },
+                    items: { $push: "$items" },
+                    orderTotal: { $first: "$orderTotal" },
+                    paymentMethod: { $first: "$paymentMethod" },
+                    addressId: { $first: "$addressId" },
+                    status:{$first:'$status'},
+                    orderDate: { $first: "$orderDate" }
+                }
+            }
+        ]);
+
+        res.status(200).json({ message: 'Filtered orders fetched successfully', filteredItems });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Error fetching filtered orders' });
+    }
+};
+
+const assignOrder = async (req, res) => {
+    try {
+      const { orderId, agents,restId } = req.body;
+    
+      const order = await orderCollection.findById(orderId);
+
+      const user = await userCollection.findById(order.userId)
+
+      const restaurant = await restaurantCollection.findById(restId)
+
+      const item = order.items.map(item=>({
+        menuName:item.menuName,
+        menuid:item.menuId,
+        price:item.price,
+        quantity:item.quantity,
+        totalPrice:item.totalPrice,
+        image:item.image
+      }))
+
+      const data = {
+        orderId:orderId,
+        paymentMethod:order.paymentMethod,
+        orderDate:order.orderDate,
+        addressId:order.addressId,
+        userLatitude:order.userLatitude,
+        userLongitude:order.userLongitude,
+        restLatitude:restaurant.latitude,
+        restLongitude:restaurant.longitude,
+        items:item,
+        orderTotal:order.orderTotal,
+        username:user.username,
+        mobile:user.mobile,
+        restId:restId,
+        restaurantName:restaurant.restaurantName
+      }
+  
+      const sortedAgents = agents.sort((a, b) => a.distance - b.distance);
+  
+      let assignedAgent = null;
+  
+      for (let agentId of sortedAgents) {
+        const agent = await agentCollection.findById(agentId);
+  
+        if (agent && agent.status !== 'assigned') {
+          const result = await agentCollection.findByIdAndUpdate(
+            agent._id,
+            { $push: { order: data }, status: 'assigned' },
+            { new: true } // Return the updated document
+          );
+  
+          if (result) {
+            assignedAgent = result;
+            break;
+          }
+        }
+      }
+  
+      if (!assignedAgent) {
+        return res.status(400).json({ message: 'No agents are free' });
+      }
+  
+      res.status(200).json({ message: 'Assigned successfully', closestAgent: assignedAgent });
+  
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  };
+  
+  
+
+module.exports = restaurantController = {getName,getData,editData,editImage,addMenu,getLocation,getAgents,getMenu,editMenu,getOrders,updateReason,acceptOrder,filterOrders,assignOrder,pickUp}

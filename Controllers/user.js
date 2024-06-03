@@ -9,6 +9,16 @@ const tempAgentCollection= require('../Model/agentTempSchema');
 const tempRestCollection = require('../Model/tempRestSchema');
 const menuCollection = require('../Model/menuItems')
 const cartCollection = require('../Model/cart')
+const billingCollection = require('../Model/billingModel');
+const orderCollection = require('../Model/orderSchema');
+const env = require('dotenv').config()
+const Razorpay = require('razorpay')
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAYKEY,
+  key_secret: process.env.RAZORPAYID
+})
+
 
 const postSignup = async (req, res) => {
   try {
@@ -193,6 +203,7 @@ const resendOtp = async(req,res)=>{
 const postLogin = async (req, res) => {
   try {
     const { user,role } = req.body;
+    console.log(role);
 
     let collection;
 
@@ -229,13 +240,15 @@ const postLogin = async (req, res) => {
       userId: existingEmail._id,
       role:existingEmail.role 
     };
-    const secretKey = process.env.SECRETKEY; 
+    const accessSecretKey = process.env.ACCESSKEY; 
+    const refreshSecretKey = process.env.REFRESHKEY
 
-    const token = await jwt.sign(payload, secretKey); 
+    const accessToken = await jwt.sign(payload, accessSecretKey,{expiresIn:'15m'}); 
+    const refreshToken = await jwt.sign(payload,refreshSecretKey,{expiresIn:'2d'})
 
     const id= existingEmail._id
 
-    res.status(200).json({ message: 'User logged in successfully', token:token, role:existingEmail.role,id:id,status:existingEmail.signupStatus });
+    res.status(200).json({ message: 'User logged in successfully',accessToken,refreshToken, role:existingEmail.role,id:id,status:existingEmail.signupStatus });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: 'Internal Server Error' });
@@ -344,19 +357,23 @@ const postReset= async(req,res)=>{
   }
 }
 
-const getMenu = async(req,res)=>{
+const getMenu = async (req, res) => {
   try {
-    
-    const {id} = req.body
+    const { id, page } = req.body;
+    const limit = 10; 
+    const skip = (page - 1) * limit;
 
-    const menu = await menuCollection.find({restaurantId:id})
-    const restaurant = await restaurantCollection.findOne({_id:id})
-    res.status(200).json({menu:menu, restaurant:restaurant})
+    const menu = await menuCollection.find({ restaurantId: id }).skip(skip).limit(limit);
+    const restaurant = await restaurantCollection.findOne({ _id: id });
+    const totalCount = await menuCollection.countDocuments({ restaurantId: id });
+
+    res.status(200).json({ menu, restaurant, totalCount });
   } catch (error) {
-    
     console.log(error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-}
+};
+
 
 const addToCart = async(req,res)=>{
     
@@ -366,6 +383,7 @@ const addToCart = async(req,res)=>{
 
   if(menu){
     const data = {
+      menuId:menuId,
       itemName:menu.menuName,
       description:menu.description,
       price:menu.price,
@@ -375,7 +393,8 @@ const addToCart = async(req,res)=>{
       restaurantId:menu.restaurantId,
       userId:userId,
       quantity:1,
-      totalPrice:menu.price
+      totalPrice:menu.price,
+      restId:menu.restaurantId
     }
 
     await cartCollection.insertMany([data])
@@ -393,7 +412,9 @@ const getCart = async(req,res)=>{
    const cart = await cartCollection.find({userId:userId})
    const grandPrice = cart.reduce((total, item) => total + item.totalPrice, 0);
 
-   return res.status(200).json({message:'Cart items successfully fetched',cartItems:cartItems,grandPrice:grandPrice})
+   const user = await userCollection.findById(userId)
+
+   return res.status(200).json({message:'Cart items successfully fetched',cartItems:cartItems,grandPrice:grandPrice,user:user})
   } catch (error) {
     console.log(error);
   }
@@ -434,4 +455,329 @@ const updateQuantity = async(req,res)=>{
   }
 }
 
-module.exports = userController = {postSignup,postRestaurantSignup,verifyOtp,resendOtp,postLogin,verifyEmail,resetPassword,postReset,getMenu,addToCart,getCart,removeCart,updateQuantity}
+const addLocation = async(req,res)=>{
+  try {
+    
+    const {latitude,longitude,userId} = req.body
+
+    await userCollection.findOneAndUpdate({_id:userId},{latitude:latitude,longitude:longitude})
+
+    res.status(200).json({message:'Location fetched successfully'})
+
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const addBillingAddress = async(req,res)=>{
+  try {
+    const {userId,billingAddress} = req.body
+
+    const existingBilling = await billingCollection.find({userId:userId})
+
+    if(existingBilling.length > 0){
+      return res.status(304).json({message:'Already existed'})
+    }
+
+    const billingData = {
+      firstName:billingAddress.firstName,
+      lastName:billingAddress.lastName,
+      email:billingAddress.email,
+      mobile:billingAddress.mobile,
+      address:billingAddress.address,
+      userId:userId
+    }
+
+    await billingCollection.insertMany([billingData])
+
+    res.status(200).json({message:'Billing address updated successfully'})
+  } catch (error) {
+    
+  }
+}
+
+const getAddress = async(req,res)=>{
+  try {
+    
+    const {userId} = req.body
+
+    const billingData = await billingCollection.find({userId:userId})
+    res.status(200).json({message:'Billing address updated successfully',billingData})
+
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const deleteAddress = async(req,res)=>{
+  try {
+    
+    const {userId} = req.body
+    await billingCollection.deleteOne({_id:userId})
+    res.status(200).json({message:'Deleted successfully'})
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const proceed = async(req,res)=>{
+  try {
+    
+    const {userId,addressId,total,method} = req.body
+    const cartItems = await cartCollection.find({userId:userId})
+    const user = await userCollection.findById(userId)
+    
+    
+    const items = cartItems.map(item=>({
+      menuId:item.menuId,
+      menuName:item.itemName,
+      image:item.image,
+      quantity:item.quantity,
+      price:item.price,
+      totalPrice:item.totalPrice,
+      restId:item.restId
+      })
+    )
+
+    if(method === 'cashOnDelivery'){
+       
+      const orderData = {
+        userId:userId,
+        addressId:addressId,
+        items:items,
+        orderTotal:total,
+        paymentMethod:method,
+        userLatitude:user.latitude,
+        userLongitude:user.longitude
+      }
+  
+     await orderCollection.insertMany([orderData])
+     await cartCollection.deleteMany({userId:userId})
+     res.status(200).json({message:'Order placed successfully'})
+
+    }else if(method === 'walletPayment'){
+
+       const wallet = await userCollection.findOne({_id:userId})
+
+       const walletBalance = wallet.walletBalance
+
+       if(walletBalance < total || walletBalance === undefined){
+         return res.status(300).json({message:'Insufficient Balance'})
+       }
+
+       const orderData = {
+        userId:userId,
+        addressId:addressId,
+        items:items,
+        orderTotal:total,
+        paymentMethod:method,
+        userLatitude:user.latitude,
+        userLongitude:user.longitude
+       }
+
+       await orderCollection.insertMany([orderData])
+
+       const updatedWalletBalance = walletBalance - total
+
+       const item = cartItems.map(item=>({
+        menuId:item.menuId,
+        menuName:item.itemName
+       })
+      )
+      
+      await userCollection.findOneAndUpdate(
+        {_id:userId},
+        {$set:{walletBalance:updatedWalletBalance,walletHistory:item}})
+
+      await cartCollection.deleteMany({userId:userId})
+      
+      res.status(200).json({message:'Order placed successfully'})
+       
+    }
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const generateId = async(req,res)=>{
+  try {
+    
+    const {total} = req.body
+
+    const options = {
+      amount: total * 100,
+      currency: 'INR',
+    };
+
+    razorpay.orders.create(options, function (err, order) {
+      if (err) {
+        res.status(500).json({ error: 'Razorpay order creation failed' });
+      } else {
+        res.status(200).json({ order });
+      }
+
+    });
+  } catch (error) {
+    
+  }
+}
+
+const razorpaySuccess = async(req,res)=>{
+  try {
+    const {data,userId,addressId,total,method} = req.body
+
+    const paymentDetails = await razorpay.payments.fetch(data.razorpay_payment_id)
+
+    if(paymentDetails.status === 'captured'){
+
+      const cartItems = await cartCollection.find({userId:userId})
+
+      const items = cartItems.map(item=>({
+        menuId:item.menuId,
+        menuName:item.itemName,
+        image:item.image,
+        quantity:item.quantity,
+        price:item.price,
+        totalPrice:item.totalPrice,
+        restId:item.restId
+        })
+      )
+
+      const orderData = {
+        userId:userId,
+        addressId:addressId,
+        items:items,
+        orderTotal:total,
+        paymentMethod:method,
+        paymentId:data.razorpay_payment_id,
+        userLatitude:user.latitude,
+        userLongitude:user.longitude
+       }
+
+       await orderCollection.insertMany([orderData])
+       await cartCollection.deleteMany({userId:userId})
+
+       res.status(200).json({message:'Order placed successfully'})
+    }else{
+      res.status(300).json({message:'Order not placed'})
+    }
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const getProfileData = async(req,res)=>{
+  try {
+    
+    const {userId} = req.body
+
+    const userData = await userCollection.findById(userId)
+
+    res.status(200).json({message:'successfully fetched',userData:userData})
+
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const getOrderData = async(req,res)=>{
+  try {
+    const {userId} =req.body
+
+    const orderData = await orderCollection.find({userId:userId})
+
+    res.status(200).json({message:'successfully fetched',orderData:orderData})
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const addWallet = async(req,res)=>{
+  try {
+    const {options,userId} = req.body
+    const amount = parseInt(req.body.amount)
+
+    const paymentDetails = await razorpay.payments.fetch(options.razorpay_payment_id)
+
+    if(paymentDetails.status === 'captured'){
+
+      const userData = await userCollection.findById(userId)
+
+      const wallet = parseInt(userData.walletBalance)
+
+      const updatedWalletBalance = parseInt(wallet + amount)
+
+      await userCollection.findOneAndUpdate({_id:userId},{$set:{walletBalance:updatedWalletBalance}})
+
+      res.status(200).json({message:'Amount added successfully'})
+
+    }else{
+
+      res.status(300).json({message:'something went wrong'})
+    }
+  } catch (error) {
+
+    console.log(error);
+  }
+}
+
+const changePassword = async(req,res)=>{
+  try {
+    const {userId,oldPassword,newPassword} = req.body
+
+    const user = await userCollection.findById(userId)
+
+    const password = user.password
+    const comparedPassword = await  bcrypt.compare(oldPassword,password)
+
+    if(!comparedPassword){
+      res.status(300).json({message:'Password is invalid'})
+      return
+    }
+
+    if(oldPassword === newPassword){
+      res.status(301).json({message:'must be unique'})
+      return 
+    }
+
+    const hashedPassword = await  bcrypt.hash(newPassword,10)
+
+    await userCollection.findOneAndUpdate({_id:userId},{password:hashedPassword})
+    res.status(200).json({message:'password changed successfully'})
+
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const editProfile = async(req,res)=>{
+  try {
+    const {userId,username} = req.body
+
+    await userCollection.findOneAndUpdate({_id:userId},{$set:{username:username}})
+
+    res.status(200).json({message:'Profile updated'})
+
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const searchRestaurant = async(req,res)=>{
+  try {
+    const {item} = req.params
+    
+    const searchItem = item.toLowerCase()
+
+    const restaurants = await restaurantCollection.find(
+      { restaurantName: { $regex: new RegExp(`^${searchItem}`, 'i') } },
+      { password: 0 }
+    );
+
+    res.status(200).json({message:'fetched',restaurants})
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+module.exports = userController = {postSignup,postRestaurantSignup,verifyOtp,resendOtp,postLogin,verifyEmail,resetPassword,postReset,getMenu,addToCart,getCart,removeCart,updateQuantity,addLocation,addBillingAddress,getAddress,deleteAddress,proceed,generateId,razorpaySuccess,getProfileData,getOrderData,addWallet,changePassword,editProfile,searchRestaurant}

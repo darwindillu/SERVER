@@ -1,4 +1,6 @@
 const mongoose= require('mongoose')
+const moment = require('moment-timezone')
+const IST = 'Asia/Kolkata'
 
 const userSchema= mongoose.Schema({
     username:{
@@ -32,7 +34,33 @@ const userSchema= mongoose.Schema({
     signupStatus:{
         type:String,
         default:'approved'
-    }
+    },
+    latitude:{
+        type:Number
+    },
+    longitude:{
+        type:Number
+    },
+    walletBalance:{
+        type:Number,
+        default:0
+    },
+    walletHistory:[{
+        menuId:{
+            type:mongoose.Schema.Types.ObjectId,
+            ref:'menu'
+        },
+        menuName:{
+            type:String
+        },
+        total:{
+            type:Number
+        },
+        date:{
+            type:Date,
+            default:()=>  moment().tz(IST).toDate()
+        }
+    }],
 })
 
 const userCollection= mongoose.model('user',userSchema)

@@ -25,4 +25,15 @@ const getRestaurants = async(req,res)=>{
     }
 }
 
-module.exports = agentController = {location,getRestaurants}
+const orders = async(req,res)=>{
+    try {
+        const {id} = req.body
+        const agent = await agentCollection.findById(id)
+        const orderList = agent.order
+        res.status(200).json({message:'Order fetched successfully',orderList})
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+module.exports = agentController = {location,getRestaurants,orders}
