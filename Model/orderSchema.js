@@ -38,10 +38,12 @@ const orderSchema = mongoose.Schema({
             ref:'rest'
         },
     }],
-    
+    deliveryCharge:{
+        type:Number,
+        default:30
+    },
     orderDate: {
         type: Date,
-        default: () => moment().tz(IST).toDate()
     },
     rejectedReason:{
         type:String
@@ -81,8 +83,19 @@ const orderSchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'billing'
     },
-    
-});
+    role:{
+        type:String,
+        default:'orders'
+    },
+    restId:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'rest'
+    }
+  },
+  {
+    timestamps:true
+  }
+);
 
 const Order = mongoose.model('Order', orderSchema);
 

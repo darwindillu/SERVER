@@ -26,6 +26,7 @@
     "nodemailer": "^6.9.13",
     "otp-generator": "^4.0.1",
     "path": "^0.12.7",
+    "pdfkit": "^0.15.0",
     "razorpay": "^2.9.3",
     "transporter": "^0.0.1"
   }

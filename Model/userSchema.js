@@ -61,7 +61,11 @@ const userSchema= mongoose.Schema({
             default:()=>  moment().tz(IST).toDate()
         }
     }],
-})
+  },
+  {
+    timestamps:true
+  }
+)
 
 const userCollection= mongoose.model('user',userSchema)
 

@@ -12,7 +12,9 @@ router.patch('/removeAdmin',jsonMiddleware.isAdminAuthenticated,adminController.
 router.post('/getData',jsonMiddleware.isAdminAuthenticated,adminController.getSpecificData)
 router.patch('/accept',jsonMiddleware.isAdminAuthenticated,adminController.restaurantAccept)
 router.patch('/reject',jsonMiddleware.isAdminAuthenticated,adminController.restaurantReject)
-router.post('/filter',jsonMiddleware.isAdminAuthenticated,adminController.filter)
-
+router.get('/get-orders',adminController.getOrders)
+router.get('/get-menu',adminController.getMenu)
+router.get('/overall-details',adminController.details)
+router.post('/download-report',adminController.download)
 
 module.exports = router;

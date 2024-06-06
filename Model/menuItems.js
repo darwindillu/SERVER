@@ -32,6 +32,10 @@ const menuSchema = mongoose.Schema({
     restaurantId:{
         type:String,
         refer:'restaurant'
+    },
+    role:{
+        type:String,
+        default:'menu'
     }
 })
 

@@ -51,6 +51,9 @@ const agentSchema= mongoose.Schema({
         type:mongoose.Schema.Types.ObjectId,
         ref:'order'
         },
+        deliveryCharge:{
+            type:Number,
+        },
         items:[{
 
         menuName:{
@@ -95,7 +98,6 @@ const agentSchema= mongoose.Schema({
         },
         assignedDate:{
             type: Date,
-            default: () => moment().tz(IST).toDate()
         },
         status:{
             type:String,
@@ -103,6 +105,12 @@ const agentSchema= mongoose.Schema({
         },
         paymentMethod:{
             type:String
+        },
+        rejectedReason:{
+            type:String
+        },
+        rejectedDate:{
+            type:Date
         },
         addressId:{
             type:mongoose.Schema.Types.ObjectId,
@@ -119,13 +127,20 @@ const agentSchema= mongoose.Schema({
         },
         restaurantName:{
             type:String
+        },
+        deliveredDate:{
+            type:Date
         }
     }],
     status:{
         type:String,
         default:'available'
     }
-})
+  },
+  {
+    timestamps:true
+  }
+)
 
 const agentCollection= mongoose.model('agent',agentSchema)
 

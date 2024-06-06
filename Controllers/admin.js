@@ -1,12 +1,14 @@
 const agentCollection = require('../Model/agentSchema')
 const restaurantCollection = require('../Model/restaurantSchema')
 const userCollection = require('../Model/userSchema')
+const orderCollection = require('../Model/orderSchema')
+const menuCollection = require('../Model/menuItems')
+const PDFDocument = require('pdfkit')
 
 const getAll= async(req,res)=>{
   try{
 
     const {role} = req.body
-
     let collection;
 
     switch(role){
@@ -19,6 +21,12 @@ const getAll= async(req,res)=>{
       case 'restaurant':
         collection=restaurantCollection
         break;
+      case 'orders':
+        collection=orderCollection
+        break;
+      case 'menu':
+        collection=menuCollection
+        break;  
       default:
         return res.status(400).json({ message: 'Invalid role specified' });
     }
@@ -254,4 +262,175 @@ const filter= async(req,res)=>{
 
 }
 
-module.exports = adminController = {getAll,search,blockUser,unBlockUser,makeAdmin,removeAdmin,getSpecificData,restaurantAccept,restaurantReject,filter}
+const getOrders = async(req,res)=>{
+  try {
+    
+    const orders = await orderCollection.find()
+    res.status(200).json({message:'fetched',orders})
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const getMenu = async(req,res)=>{
+  try {
+    
+    const menu = await menuCollection.find()
+    res.status(200).json({message:'fetched',menu})
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+const details = async (req, res) => {
+  try {
+    const orders = await orderCollection.find();
+
+    const totalOrders = orders.length;
+    const deliveredOrders = orders.filter(order => order.status === 'delivered').length;
+    const rejectedOrders = orders.filter(order => order.status === 'rejected').length;
+
+    const totalRevenue = orders.reduce((total, order) =>
+      order.status === 'delivered' ? total + order.orderTotal : total, 0
+    );
+
+    const totalUsers = await userCollection.countDocuments();
+
+    const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+    const currentDate = new Date();
+
+    const startDate = new Date(currentDate);
+    startDate.setDate(startDate.getDate() - currentDate.getDay());
+    const endDate = new Date(currentDate);
+    endDate.setDate(endDate.getDate() + (6 - currentDate.getDay()));
+
+    const orderDays = await orderCollection.find({ orderDate: { $gte: startDate, $lte: endDate } });
+
+    const ordersByDay = orderDays.reduce((acc, order) => {
+      const dayIndex = order.orderDate.getDay();
+      const dayOfWeek = daysOfWeek[dayIndex];
+      acc[dayOfWeek] = acc[dayOfWeek] ? acc[dayOfWeek] + 1 : 1;
+      return acc;
+    }, {});
+
+    const data = daysOfWeek.map(day => {
+      const orderCount = ordersByDay[day] || 0;
+      return { label: day, y: orderCount };
+    });
+
+    const revenueData = {
+      2023: await getMonthlyRevenue(2023),
+      2024: await getMonthlyRevenue(2024)
+    };
+
+    res.status(200).json({
+      totalOrders,
+      deliveredOrders,
+      rejectedOrders,
+      totalRevenue,
+      totalUsers,
+      data: data,
+      revenueData
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+    console.log(error);
+  }
+};
+
+const getMonthlyRevenue = async (year) => {
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+  
+  const startOfYear = new Date(year, 0, 1);
+  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
+
+  const orders = await orderCollection.find({
+    orderDate: { $gte: startOfYear, $lte: endOfYear },
+    status: 'delivered'
+  });
+
+  const revenueByMonth = orders.reduce((acc, order) => {
+    const month = order.orderDate.getMonth();
+    acc[month] = (acc[month] || 0) + order.orderTotal;
+    return acc;
+  }, {});
+
+  return months.map((month, index) => ({
+    label: month,
+    y: revenueByMonth[index] || 0
+  }));
+};
+
+const download = async (req, res) => {
+  try {
+    const { report } = req.body;
+
+    const currentDate = new Date(Date.now());
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    const day = currentDate.getDate();
+    const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    let startDate, endDate;
+
+    if (report === 'daily') {
+      startDate = new Date(year, month - 1, day, 0, 0, 0);
+      endDate = new Date(year, month - 1, day, 23, 59, 59);
+    } else if (report === 'monthly') {
+      startDate = new Date(year, month - 1, 1, 0, 0, 0);
+      endDate = new Date(year, month, 0, 23, 59, 59);
+    } else {
+      res.status(400).send('Invalid report type');
+      return;
+    }
+
+    const orders = await orderCollection.find({
+      orderDate: { $gte: startDate, $lte: endDate }
+    });
+
+    const totalOrders = orders.length;
+    const deliveredOrders = orders.filter(order => order.status === 'delivered').length;
+    const rejectedOrders = orders.filter(order => order.status === 'rejected').length;
+    const totalRevenue = orders.reduce((total, order) =>
+      order.status === 'delivered' ? total + order.orderTotal : total, 0
+    );
+
+    const totalUsers = await userCollection.countDocuments({
+      createdAt: { $gte: startDate, $lte: endDate }
+    });
+
+    const doc = new PDFDocument();
+    let fileName = '';
+
+    if (report === 'daily') {
+      fileName = `sales_report_${formattedDate}.pdf`;
+      doc.fontSize(16).text(`Daily Sales Report for ${formattedDate}`, { align: 'center' });
+    } else if (report === 'monthly') {
+      fileName = `sales_report_${month}.pdf`;
+      doc.fontSize(16).text(`Yearly Sales Report for ${month}`, { align: 'center' });
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+
+    doc.pipe(res);
+
+    doc.fontSize(14).text(`Total Orders: ${totalOrders}`);
+    doc.fontSize(14).text(`Total Delivered: ${deliveredOrders}`);
+    doc.fontSize(14).text(`Total Rejected: ${rejectedOrders}`);
+    doc.fontSize(14).text(`Total Revenue: \u20B9${totalRevenue}`);
+    doc.fontSize(14).text(`Total Users: ${totalUsers}`);
+    doc.end();
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
+
+module.exports = adminController = {getAll,search,blockUser,unBlockUser,makeAdmin,removeAdmin,getSpecificData,restaurantAccept,restaurantReject,filter,getOrders,getMenu,details,download}

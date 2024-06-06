@@ -62,7 +62,11 @@ const restaurantSchema= mongoose.Schema({
     longitude:{
         type:Number
     }
-})
+  },
+  {
+    timestamps:true
+  }
+)
 
 const restaurantCollection= mongoose.model('rest',restaurantSchema)
 

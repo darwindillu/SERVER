@@ -308,8 +308,15 @@ const assignOrder = async (req, res) => {
         image:item.image
       }))
 
+        const currentDate = new Date(Date.now())
+        const year = currentDate.getFullYear()
+        const month = currentDate.getMonth() + 1
+        const day = currentDate.getDate()
+        const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+
       const data = {
         orderId:orderId,
+        deliveryCharge:order.deliveryCharge,
         paymentMethod:order.paymentMethod,
         orderDate:order.orderDate,
         addressId:order.addressId,
@@ -318,6 +325,8 @@ const assignOrder = async (req, res) => {
         restLatitude:restaurant.latitude,
         restLongitude:restaurant.longitude,
         items:item,
+        orderDate:order.orderDate,
+        assignedDate:formattedDate,
         orderTotal:order.orderTotal,
         username:user.username,
         mobile:user.mobile,
@@ -336,7 +345,7 @@ const assignOrder = async (req, res) => {
           const result = await agentCollection.findByIdAndUpdate(
             agent._id,
             { $push: { order: data }, status: 'assigned' },
-            { new: true } // Return the updated document
+            { new: true } 
           );
   
           if (result) {

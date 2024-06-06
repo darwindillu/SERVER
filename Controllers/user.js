@@ -203,7 +203,6 @@ const resendOtp = async(req,res)=>{
 const postLogin = async (req, res) => {
   try {
     const { user,role } = req.body;
-    console.log(role);
 
     let collection;
 
@@ -365,9 +364,11 @@ const getMenu = async (req, res) => {
 
     const menu = await menuCollection.find({ restaurantId: id }).skip(skip).limit(limit);
     const restaurant = await restaurantCollection.findOne({ _id: id });
+    const restaurantName = restaurant.restaurantName.toUpperCase()
+    const district = restaurant.district.toUpperCase()
     const totalCount = await menuCollection.countDocuments({ restaurantId: id });
 
-    res.status(200).json({ menu, restaurant, totalCount });
+    res.status(200).json({ menu, restaurant, totalCount,restaurantName,district });
   } catch (error) {
     console.log(error);
     res.status(500).json({ error: 'Internal server error' });
@@ -540,6 +541,12 @@ const proceed = async(req,res)=>{
     )
 
     if(method === 'cashOnDelivery'){
+
+        const currentDate = new Date(Date.now())
+        const year = currentDate.getFullYear()
+        const month = currentDate.getMonth() + 1
+        const day = currentDate.getDate()
+        const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
        
       const orderData = {
         userId:userId,
@@ -548,7 +555,9 @@ const proceed = async(req,res)=>{
         orderTotal:total,
         paymentMethod:method,
         userLatitude:user.latitude,
-        userLongitude:user.longitude
+        userLongitude:user.longitude,
+        orderDate:formattedDate,
+        restId:items.restId
       }
   
      await orderCollection.insertMany([orderData])
@@ -565,6 +574,12 @@ const proceed = async(req,res)=>{
          return res.status(300).json({message:'Insufficient Balance'})
        }
 
+        const currentDate = new Date(Date.now())
+        const year = currentDate.getFullYear()
+        const month = currentDate.getMonth() + 1
+        const day = currentDate.getDate()
+        const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+
        const orderData = {
         userId:userId,
         addressId:addressId,
@@ -572,7 +587,9 @@ const proceed = async(req,res)=>{
         orderTotal:total,
         paymentMethod:method,
         userLatitude:user.latitude,
-        userLongitude:user.longitude
+        userLongitude:user.longitude,
+        orderDate:formattedDate,
+        restId:items.restId
        }
 
        await orderCollection.insertMany([orderData])
@@ -631,6 +648,7 @@ const razorpaySuccess = async(req,res)=>{
     if(paymentDetails.status === 'captured'){
 
       const cartItems = await cartCollection.find({userId:userId})
+      const user = await userCollection.findById(userId)
 
       const items = cartItems.map(item=>({
         menuId:item.menuId,
@@ -643,6 +661,12 @@ const razorpaySuccess = async(req,res)=>{
         })
       )
 
+        const currentDate = new Date(Date.now())
+        const year = currentDate.getFullYear()
+        const month = currentDate.getMonth() + 1
+        const day = currentDate.getDate()
+        const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+
       const orderData = {
         userId:userId,
         addressId:addressId,
@@ -651,7 +675,9 @@ const razorpaySuccess = async(req,res)=>{
         paymentMethod:method,
         paymentId:data.razorpay_payment_id,
         userLatitude:user.latitude,
-        userLongitude:user.longitude
+        userLongitude:user.longitude,
+        orderDate:formattedDate,
+        restId:items.restId
        }
 
        await orderCollection.insertMany([orderData])
