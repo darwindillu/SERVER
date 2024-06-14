@@ -6,7 +6,7 @@ let socketMap = {};
 function init(server) {
     io = socketIO(server, {
         cors: {
-            origin: "http://localhost:4200",
+            origin: "https://www.quickbites.life",
             methods: ["GET", "POST"],
             allowedHeaders: ["Content-Type"],
             credentials: true
