@@ -152,7 +152,7 @@ const deliverOrder = async(req,res)=>{
 
         await orderCollection.findOneAndUpdate(
             {_id:orderId},
-            {$set:{status:'delivered'}},
+            {$set:{status:'delivered',agentId:agentId}},
             {new:true}
         )
 

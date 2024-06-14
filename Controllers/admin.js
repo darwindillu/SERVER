@@ -7,8 +7,9 @@ const PDFDocument = require('pdfkit')
 
 const getAll= async(req,res)=>{
   try{
-
+    console.log('hiiii admin');
     const {role} = req.body
+    console.log(role);
     let collection;
 
     switch(role){
@@ -31,7 +32,8 @@ const getAll= async(req,res)=>{
         return res.status(400).json({ message: 'Invalid role specified' });
     }
 
-    const users= await collection.find({role:{$ne:'superAdmin'}})
+    const users= await collection.find({role:{$ne:'admin'}})
+    console.log(users);
   
     if (users.length > 0) {
       res.status(200).json({ users: users });
@@ -431,6 +433,74 @@ const download = async (req, res) => {
   }
 };
 
+const searchMenus = async (req, res) => {
+  try {
+    const { item } = req.body;
+    
+    if (!item || typeof item !== 'string') {
+      return res.status(400).json({ message: 'Invalid search item' });
+    }
+
+    console.log(item);
+
+    const menu = await menuCollection.find({ menuName: { $regex: new RegExp(`^${item}`, 'i') } });
+    console.log(menu);
+
+    res.status(200).json({ message: 'fetched', menu });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+const searchOrders = async (req, res) => {
+  try {
+    const { item } = req.body;
+    
+    if (!item || typeof item !== 'string') {
+      return res.status(400).json({ message: 'Invalid search item' });
+    }
+
+    console.log(item);
+
+    const orders = await orderCollection.find({ _id:item });
+    console.log(orders);
+
+    res.status(200).json({ message: 'fetched', orders });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+const getOrderDetails = async (req, res)=>{
+  try {
+    
+    const {type,id} = req.body
+
+    let data;
+    let items;
+
+    if(type==='order'){
+
+      data = await orderCollection.findOne({_id:id})
+      items=data.items
+      console.log(items);
+    }else if(type==='restaurant'){
+
+      data = await restaurantCollection.findOne({_id:id})
+
+    }else{
+
+      data = await userCollection.findOne({_id:id})
+    }
+    console.log(data);
+    res.status(200).json({message:'fetched',data,items})
+  }catch (error) {
+    console.log(error);
+  }
+}
 
 
-module.exports = adminController = {getAll,search,blockUser,unBlockUser,makeAdmin,removeAdmin,getSpecificData,restaurantAccept,restaurantReject,filter,getOrders,getMenu,details,download}
+
+module.exports = adminController = {getAll,getOrderDetails,search,blockUser,unBlockUser,searchOrders,searchMenus,makeAdmin,removeAdmin,getSpecificData,restaurantAccept,restaurantReject,filter,getOrders,getMenu,details,download}

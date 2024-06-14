@@ -30,5 +30,4 @@ router.post('/change-password',userController.changePassword)
 router.post('/edit-profile',userController.editProfile)
 router.get('/search-restaurant/:item',userController.searchRestaurant)
 
-
 module.exports = router;

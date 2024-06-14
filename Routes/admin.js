@@ -16,5 +16,9 @@ router.get('/get-orders',adminController.getOrders)
 router.get('/get-menu',adminController.getMenu)
 router.get('/overall-details',adminController.details)
 router.post('/download-report',adminController.download)
+router.post('/filter',adminController.filter)
+router.post('/search-menu',adminController.searchMenus)
+router.post('/search-orders',adminController.searchOrders)
+router.post('/get-order-details',adminController.getOrderDetails)
 
 module.exports = router;

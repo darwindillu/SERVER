@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+
+# Optional (if applicable):
+.env  # Exclude .env for security (consider using environment variables)
+
+.git
+.gitignore
+.DS_Store

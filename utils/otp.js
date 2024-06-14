@@ -1,30 +1,36 @@
-const nodemailer = require('nodemailer')
-const generateOtp = require('generate-otp')
+const nodemailer = require('nodemailer');
+const generateOtp = require('generate-otp');
 
 const transporter = nodemailer.createTransport({
-    service: 'Gmail',
-    auth: {
-      user: process.env.OTPEMAIL,
-      pass: process.env.OTPPASS
-    },
+  service: 'Gmail',
+  auth: {
+    user: process.env.OTPEMAIL,
+    pass: process.env.OTPPASS,
+  },
+});
+
+function otp(email) {
+  console.log(email);
+  const otp = generateOtp.generate(6, { digits: true, alphabets: false, specialChars: false });
+
+  const mailOptions = {
+    from: process.env.OTPEMAIL,
+    to: email,
+    subject: 'Your OTP Code',
+    text: `Your OTP code is: ${otp}`,
+  };
+
+  console.log(otp);
+
+  transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.error('Error sending email: ' + error);
+    } else {
+      console.log('Email sent to: ' + email);
+    }
   });
 
-  function otp(email){
-    const otp = generateOtp.generate(6, { digits: true, alphabets: false, specialChars: false });
-  
-    const mailOptions = {
-      from: 'ddillu777@gmail.com',
-      to: `${email}`,
-      subject: 'Your OTP Code',
-      text: `Your OTP code is: ${otp}`,
-    };
-     transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.log('Error sending email: ' + error);
-      } else {
-        console.log('Email sent to:'+ `${email}`);
-    }})
-        return otp
-    }
+  return otp;
+}
 
-module.exports= otpPage = {otp}
+module.exports = { otp };
