@@ -188,7 +188,7 @@ const restaurantAccept = async(req,res)=>{
   try {
     
     const {id} = req.body
-    await restaurantCollection.updateOne({_id:id},{signupStatus:'accepted'})
+    await restaurantCollection.updateOne({_id:id},{$set:{signupStatus:'accepted'}})
     res.status(200).json({message:'Restaurant accepted successfully'})
 
   } catch (error) {    

@@ -10,7 +10,7 @@ router.patch('/unblock',jsonMiddleware.isAdminAuthenticated,adminController.unBl
 router.patch('/makeAdmin',jsonMiddleware.isAdminAuthenticated,adminController.makeAdmin)
 router.patch('/removeAdmin',jsonMiddleware.isAdminAuthenticated,adminController.removeAdmin)
 router.post('/getData',jsonMiddleware.isAdminAuthenticated,adminController.getSpecificData)
-router.patch('/accept',jsonMiddleware.isAdminAuthenticated,adminController.restaurantAccept)
+router.patch('/accept',adminController.restaurantAccept)
 router.patch('/reject',jsonMiddleware.isAdminAuthenticated,adminController.restaurantReject)
 router.get('/get-orders',adminController.getOrders)
 router.get('/get-menu',adminController.getMenu)

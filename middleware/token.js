@@ -25,7 +25,7 @@ const authenticate = (role, collection) => {
   };
 };
 
-const isAdminAuthenticated = authenticate('superAdmin', userCollection);
+const isAdminAuthenticated = authenticate('admin', userCollection);
 const isRestaurantAuth = authenticate('restaurant', restaurantCollection);
 const isAgentAuth = authenticate('agent', agentCollection);
 const isUserAuth = authenticate('user', userCollection);

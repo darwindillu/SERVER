@@ -4,7 +4,7 @@ const tempUserCollection = require('../Model/tempUserSchema')
 const tempRestCollection = require('../Model/tempRestSchema');
 const agentTempCollection= require('../Model/agentTempSchema')
 
-const mongoUri = process.env.MONGO_URI ||'mongodb://mongo_db:27017/QuickBite'
+const mongoUri ='mongodb://127.0.0.1:27017/QuickBite'
 
 mongoose.connect(mongoUri)
 .then(()=>{
