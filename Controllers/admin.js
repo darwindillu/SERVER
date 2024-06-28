@@ -4,6 +4,10 @@ const userCollection = require('../Model/userSchema')
 const orderCollection = require('../Model/orderSchema')
 const menuCollection = require('../Model/menuItems')
 const PDFDocument = require('pdfkit')
+const PDFTable = require('pdfkit-table');
+const mongoose = require('mongoose')
+const moment = require('moment-timezone');
+
 
 const getAll= async(req,res)=>{
   try{
@@ -267,7 +271,7 @@ const filter= async(req,res)=>{
 const getOrders = async(req,res)=>{
   try {
     
-    const orders = await orderCollection.find()
+    const orders = await orderCollection.find({})
     res.status(200).json({message:'fetched',orders})
   } catch (error) {
     console.log(error);
@@ -307,10 +311,15 @@ const details = async (req, res) => {
     const endDate = new Date(currentDate);
     endDate.setDate(endDate.getDate() + (6 - currentDate.getDay()));
 
-    const orderDays = await orderCollection.find({ orderDate: { $gte: startDate, $lte: endDate } });
+    const orderDays = await orderCollection.find({ 
+      orderDate: { 
+        $gte: moment(startDate).format("DD-MM-YYYY hh:mm:ss A"), 
+        $lte: moment(endDate).format("DD-MM-YYYY hh:mm:ss A")
+      }
+    });
 
     const ordersByDay = orderDays.reduce((acc, order) => {
-      const dayIndex = order.orderDate.getDay();
+      const dayIndex = moment(order.orderDate, "DD-MM-YYYY hh:mm:ss A").toDate().getDay();
       const dayOfWeek = daysOfWeek[dayIndex];
       acc[dayOfWeek] = acc[dayOfWeek] ? acc[dayOfWeek] + 1 : 1;
       return acc;
@@ -325,6 +334,8 @@ const details = async (req, res) => {
       2023: await getMonthlyRevenue(2023),
       2024: await getMonthlyRevenue(2024)
     };
+
+    console.log(revenueData);
 
     res.status(200).json({
       totalOrders,
@@ -347,8 +358,8 @@ const getMonthlyRevenue = async (year) => {
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
   ];
   
-  const startOfYear = new Date(year, 0, 1);
-  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
+  const startOfYear = moment(new Date(year, 0, 1)).format("DD-MM-YYYY hh:mm:ss A");
+  const endOfYear = moment(new Date(year, 11, 31, 23, 59, 59, 999)).format("DD-MM-YYYY hh:mm:ss A");
 
   const orders = await orderCollection.find({
     orderDate: { $gte: startOfYear, $lte: endOfYear },
@@ -356,7 +367,7 @@ const getMonthlyRevenue = async (year) => {
   });
 
   const revenueByMonth = orders.reduce((acc, order) => {
-    const month = order.orderDate.getMonth();
+    const month = moment(order.orderDate, "DD-MM-YYYY hh:mm:ss A").toDate().getMonth();
     acc[month] = (acc[month] || 0) + order.orderTotal;
     return acc;
   }, {});
@@ -371,11 +382,15 @@ const download = async (req, res) => {
   try {
     const { report } = req.body;
 
-    const currentDate = new Date(Date.now());
+    const currentDate = new Date();
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
     const day = currentDate.getDate();
     const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const monthName = monthNames[month - 1];
+
     let startDate, endDate;
 
     if (report === 'daily') {
@@ -389,18 +404,32 @@ const download = async (req, res) => {
       return;
     }
 
-    const orders = await orderCollection.find({
-      orderDate: { $gte: startDate, $lte: endDate }
+    const orders = await orderCollection.find({});
+    const filteredOrders = orders.filter(order => {
+      const orderDate = moment(order.orderDate, "DD-MM-YYYY hh:mm:ss A").toDate();
+      return orderDate >= startDate && orderDate <= endDate;
     });
 
-    const totalOrders = orders.length;
-    const deliveredOrders = orders.filter(order => order.status === 'delivered').length;
-    const rejectedOrders = orders.filter(order => order.status === 'rejected').length;
-    const totalRevenue = orders.reduce((total, order) =>
+    const totalOrders = filteredOrders.length;
+    const deliveredOrders = filteredOrders.filter(order => order.status === 'delivered').length;
+    const rejectedOrders = filteredOrders.filter(order => order.status === 'rejected').length;
+    const totalRevenue = filteredOrders.reduce((total, order) =>
       order.status === 'delivered' ? total + order.orderTotal : total, 0
     );
 
     const totalUsers = await userCollection.countDocuments({
+      createdAt: { $gte: startDate, $lte: endDate }
+    });
+
+    const users = await userCollection.find({
+      createdAt: { $gte: startDate, $lte: endDate }
+    });
+
+    const restaurant = await restaurantCollection.find({
+      createdAt: { $gte: startDate, $lte: endDate }
+    });
+
+    const agents = await agentCollection.find({
       createdAt: { $gte: startDate, $lte: endDate }
     });
 
@@ -409,10 +438,10 @@ const download = async (req, res) => {
 
     if (report === 'daily') {
       fileName = `sales_report_${formattedDate}.pdf`;
-      doc.fontSize(16).text(`Daily Sales Report for ${formattedDate}`, { align: 'center' });
+      doc.fontSize(16).text(`QuickBite Daily Sales Report for ${formattedDate}`, { align: 'right', underline: true });
     } else if (report === 'monthly') {
-      fileName = `sales_report_${month}.pdf`;
-      doc.fontSize(16).text(`Yearly Sales Report for ${month}`, { align: 'center' });
+      fileName = `sales_report_${monthName}.pdf`;
+      doc.fontSize(16).text(`QuickBite Monthly Sales Report for ${monthName}-${year}`, { align: 'center', underline: true });
     }
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -420,18 +449,276 @@ const download = async (req, res) => {
 
     doc.pipe(res);
 
-    doc.fontSize(14).text(`Total Orders: ${totalOrders}`);
-    doc.fontSize(14).text(`Total Delivered: ${deliveredOrders}`);
-    doc.fontSize(14).text(`Total Rejected: ${rejectedOrders}`);
-    doc.fontSize(14).text(`Total Revenue: \u20B9${totalRevenue}`);
-    doc.fontSize(14).text(`Total Users: ${totalUsers}`);
+    doc.moveDown(3);
+    doc.font('Helvetica-Bold').fontSize(14).text('Summary', { underline: true, align: 'left' });
+    doc.moveDown();
+    doc.font('Helvetica').fontSize(12);
+
+    const summaryData = [
+      { label: 'Total Orders', value: totalOrders },
+      { label: 'Total Delivered', value: deliveredOrders },
+      { label: 'Total Rejected', value: rejectedOrders },
+      { label: 'Total Revenue', value: `RS ${totalRevenue}.00` },
+      { label: 'Total Users', value: totalUsers }
+    ];
+
+    function drawSummaryTable(doc, data) {
+      const startX = 30;
+      const startY = doc.y;
+      const colWidth = (doc.page.width - 2 * startX) / 2;
+      const rowHeight = 20;
+      const padding = 5;
+
+      data.forEach((item, index) => {
+        const rowY = startY + index * rowHeight;
+
+        doc.rect(startX, rowY, colWidth, rowHeight).stroke();
+        doc.text(item.label, startX + padding, rowY + padding, { width: colWidth, align: 'left' });
+
+        doc.rect(startX + colWidth, rowY, colWidth, rowHeight).stroke();
+        doc.text(item.value.toString(), startX + colWidth + padding, rowY + padding, { width: colWidth - padding, align: 'left' });
+      });
+    }
+
+    drawSummaryTable(doc, summaryData);
+
+    doc.moveDown(5);
+    doc.font('Helvetica-Bold').fontSize(14).text('Order Details', { underline: true, align: 'left' });
+    doc.moveDown();
+    doc.font('Helvetica').fontSize(10);
+
+    const ordersTable = {
+      headers: ['User Name', 'User Email', 'Status', 'Total Price', 'Order Date', 'Agent Name'],
+      rows: filteredOrders.map(order => [
+        order.userName.toUpperCase(),
+        order.userEmail,
+        order.status,
+        `RS ${order.orderTotal}.00`,
+        order.orderDate.slice(0, 10),
+        order.agentName
+      ])
+    };
+
+    drawOrdersTable(doc, ordersTable);
+
+    function drawOrdersTable(doc, table) {
+      const startX = 30;
+      const startY = doc.y;
+      const padding = 5; 
+      const rowHeight = 50; 
+      const colWidth = (doc.page.width - 2 * startX) / table.headers.length; 
+
+      doc.font('Helvetica-Bold');
+      table.headers.forEach((header, i) => {
+        doc.rect(startX + i * colWidth, startY, colWidth, rowHeight).fill('#CCCCCC').stroke();
+        doc.fillColor('#000000').text(header, startX + i * colWidth + padding, startY + padding, { width: colWidth - padding, align: 'left' });
+      });
+
+      doc.font('Helvetica');
+
+      table.rows.forEach((row, rowIndex) => {
+        const rowY = startY + rowHeight + rowIndex * rowHeight;
+        const fillColor = rowIndex % 2 === 0 ? '#FFFFFF' : '#F0F0F0';
+        row.forEach((cell, i) => {
+          doc.rect(startX + i * colWidth, rowY, colWidth, rowHeight).fill(fillColor).stroke();
+          doc.fillColor('#000000').text(cell, startX + i * colWidth + padding, rowY + padding, { width: colWidth - padding, align: 'left' });
+        });
+      });
+
+      doc.rect(startX, startY, colWidth * table.headers.length, rowHeight + table.rows.length * rowHeight).stroke();
+    }
+
+    doc.moveDown(5);
+    doc.font('Helvetica').fontSize(10);
+
+    const allItems = [];
+    filteredOrders.forEach(order => {
+      order.items.forEach(item => {
+        allItems.push({
+          menuName: item.menuName,
+          quantity: item.quantity,
+          price: item.price,
+          totalPrice: item.price * item.quantity
+        });
+      });
+    });
+
+    const menuTable = {
+      headers: ['Menu Name', 'Quantity', 'Price', 'Total Price'],
+      rows: allItems.map(item => [
+        item.menuName.toUpperCase(),
+        item.quantity,
+        `RS ${item.price}.00`,
+        `RS ${item.totalPrice}.00`
+      ])
+    };
+
+    drawMenuTable(doc, menuTable);
+
+    function drawMenuTable(doc, table) {
+      const startX = 30;
+      const startY = doc.y;
+      const padding = 5; 
+      const rowHeight = 50; 
+      const colWidth = (doc.page.width - 2 * startX) / table.headers.length; 
+
+      doc.font('Helvetica-Bold');
+      table.headers.forEach((header, i) => {
+        doc.rect(startX + i * colWidth, startY, colWidth, rowHeight).fill('#CCCCCC').stroke();
+        doc.fillColor('#000000').text(header, startX + i * colWidth + padding, startY + padding, { width: colWidth - padding, align: 'left' });
+      });
+
+      doc.font('Helvetica');
+      table.rows.forEach((row, rowIndex) => {
+        const rowY = startY + rowHeight + rowIndex * rowHeight;
+        const fillColor = rowIndex % 2 === 0 ? '#FFFFFF' : '#F0F0F0';
+        row.forEach((cell, i) => {
+          doc.rect(startX + i * colWidth, rowY, colWidth, rowHeight).fill(fillColor).stroke();
+          doc.fillColor('#000000').text(cell, startX + i * colWidth + padding, rowY + padding, { width: colWidth - padding, align: 'left' });
+        });
+      });
+
+      doc.rect(startX, startY, colWidth * table.headers.length, rowHeight + table.rows.length * rowHeight).stroke();
+    }
+
+    doc.moveDown(5);
+    doc.font('Helvetica-Bold').fontSize(14).text('Customer Details', { underline: true, align: 'left' });
+    doc.moveDown();
+    doc.font('Helvetica').fontSize(10);
+
+    const userTable = {
+      headers: ['Name', 'Email', 'Phone'],
+      rows: users.map(user => [
+        user.username.toUpperCase(),
+        user.email,
+        user.mobile,
+      ])
+    };
+
+    drawUserTable(doc, userTable);
+
+    function drawUserTable(doc, table) {
+      const startX = 30;
+      const startY = doc.y;
+      const padding = 5; 
+      const rowHeight = 50; 
+      const colWidth = (doc.page.width - 2 * startX) / table.headers.length; 
+
+      doc.font('Helvetica-Bold');
+      table.headers.forEach((header, i) => {
+        doc.rect(startX + i * colWidth, startY, colWidth, rowHeight).fill('#CCCCCC').stroke();
+        doc.fillColor('#000000').text(header, startX + i * colWidth + padding, startY + padding, { width: colWidth - padding, align: 'left' });
+      });
+
+      doc.font('Helvetica');
+      table.rows.forEach((row, rowIndex) => {
+        const rowY = startY + rowHeight + rowIndex * rowHeight;
+        const fillColor = rowIndex % 2 === 0 ? '#FFFFFF' : '#F0F0F0';
+        row.forEach((cell, i) => {
+          doc.rect(startX + i * colWidth, rowY, colWidth, rowHeight).fill(fillColor).stroke();
+          doc.fillColor('#000000').text(cell, startX + i * colWidth + padding, rowY + padding, { width: colWidth - padding, align: 'left' });
+        });
+      });
+
+      doc.rect(startX, startY, colWidth * table.headers.length, rowHeight + table.rows.length * rowHeight).stroke();
+    }
+
+    doc.moveDown(5);
+    doc.font('Helvetica-Bold').fontSize(14).text('Restaurant Details', { underline: true, align: 'left' });
+    doc.moveDown();
+    doc.font('Helvetica').fontSize(10);
+
+    const restaurantTable = {
+      headers: ['Restaurant Name', 'Email', 'Opening Time', 'Closing Time'],
+      rows: restaurant.map(r => [
+        r.restaurantName.toUpperCase(),
+        r.email,
+        r.openingTime,
+        r.closingTime
+      ])
+    };
+
+    drawRestaurantTable(doc, restaurantTable);
+
+    function drawRestaurantTable(doc, table) {
+      const startX = 30;
+      const startY = doc.y;
+      const padding = 5; 
+      const rowHeight = 50; 
+      const colWidth = (doc.page.width - 2 * startX) / table.headers.length; 
+
+      doc.font('Helvetica-Bold');
+      table.headers.forEach((header, i) => {
+        doc.rect(startX + i * colWidth, startY, colWidth, rowHeight).fill('#CCCCCC').stroke();
+        doc.fillColor('#000000').text(header, startX + i * colWidth + padding, startY + padding, { width: colWidth - padding, align: 'left' });
+      });
+
+      doc.font('Helvetica');
+      table.rows.forEach((row, rowIndex) => {
+        const rowY = startY + rowHeight + rowIndex * rowHeight;
+        const fillColor = rowIndex % 2 === 0 ? '#FFFFFF' : '#F0F0F0';
+        row.forEach((cell, i) => {
+          doc.rect(startX + i * colWidth, rowY, colWidth, rowHeight).fill(fillColor).stroke();
+          doc.fillColor('#000000').text(cell, startX + i * colWidth + padding, rowY + padding, { width: colWidth - padding, align: 'left' });
+        });
+      });
+
+      doc.rect(startX, startY, colWidth * table.headers.length, rowHeight + table.rows.length * rowHeight).stroke();
+    }
+
+    doc.moveDown(5);
+    doc.font('Helvetica-Bold').fontSize(14).text('Agent Details', { underline: true, align: 'left' });
+    doc.moveDown();
+    doc.font('Helvetica').fontSize(10);
+
+    const agentTable = {
+      headers: ['Agent Name', 'Email', 'Mobile'],
+      rows: agents.map(agent => [
+        agent.username.toUpperCase(),
+        agent.email,
+        agent.mobile
+      ])
+    };
+
+    drawAgentTable(doc, agentTable);
+
+    function drawAgentTable(doc, table) {
+      const startX = 30;
+      const startY = doc.y;
+      const padding = 5; 
+      const rowHeight = 50; 
+      const colWidth = (doc.page.width - 2 * startX) / table.headers.length; 
+
+      doc.font('Helvetica-Bold');
+      table.headers.forEach((header, i) => {
+        doc.rect(startX + i * colWidth, startY, colWidth, rowHeight).fill('#CCCCCC').stroke();
+        doc.fillColor('#000000').text(header, startX + i * colWidth + padding, startY + padding, { width: colWidth - padding, align: 'left' });
+      });
+
+      doc.font('Helvetica');
+      table.rows.forEach((row, rowIndex) => {
+        const rowY = startY + rowHeight + rowIndex * rowHeight;
+        const fillColor = rowIndex % 2 === 0 ? '#FFFFFF' : '#F0F0F0';
+        row.forEach((cell, i) => {
+          doc.rect(startX + i * colWidth, rowY, colWidth, rowHeight).fill(fillColor).stroke();
+          doc.fillColor('#000000').text(cell, startX + i * colWidth + padding, rowY + padding, { width: colWidth - padding, align: 'left' });
+        });
+      });
+
+      doc.rect(startX, startY, colWidth * table.headers.length, rowHeight + table.rows.length * rowHeight).stroke();
+    }
+
     doc.end();
 
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).send('Internal Server Error');
   }
 };
+
+
+
+
 
 const searchMenus = async (req, res) => {
   try {
@@ -456,14 +743,17 @@ const searchMenus = async (req, res) => {
 const searchOrders = async (req, res) => {
   try {
     const { item } = req.body;
+    console.log(item);
     
     if (!item || typeof item !== 'string') {
       return res.status(400).json({ message: 'Invalid search item' });
     }
 
-    console.log(item);
+    const regex = new RegExp(item, 'i');
 
-    const orders = await orderCollection.find({ _id:item });
+    const allOrders = await orderCollection.find();
+
+    const orders = allOrders.filter(order => regex.test(order._id.toString()));
     console.log(orders);
 
     res.status(200).json({ message: 'fetched', orders });
@@ -485,7 +775,7 @@ const getOrderDetails = async (req, res)=>{
 
       data = await orderCollection.findOne({_id:id})
       items=data.items
-      console.log(items);
+      console.log('items',items);
     }else if(type==='restaurant'){
 
       data = await restaurantCollection.findOne({_id:id})

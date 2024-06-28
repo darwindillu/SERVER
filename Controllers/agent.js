@@ -211,4 +211,17 @@ const filteredOrders = async(req,res)=>{
     }
 }
 
-module.exports = agentController = {location,getRestaurants,orders,acceptOrder,rejectOrder,pickOrder,deliverOrder,filteredOrders}
+const getReviews = async(req,res)=>{
+    try {
+        
+        const {id} = req.body
+        const reviews = await reviewCollection.find({agentId:id})
+
+        res.status(200).json({message:'fetched',reviews})
+        
+    } catch (error) {
+        console.log(error);
+    }
+}
+
+module.exports = agentController = {location,getReviews,getRestaurants,orders,acceptOrder,rejectOrder,pickOrder,deliverOrder,filteredOrders}

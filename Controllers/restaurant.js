@@ -5,13 +5,13 @@ const agentCollection = require('../Model/agentSchema')
 const orderCollection = require('../Model/orderSchema')
 const mongoose = require('mongoose')
 const userCollection = require('../Model/userSchema')
+const reviewCollection = require('../Model/reviewSchema')
 
 const getName= async(req,res)=>{
 
     const {id}= req.body
     
-    const name= await restaurantCollection.findOne({_id:id},{restaurantName:1,profile:1})
-
+    const name= await restaurantCollection.findOne({_id:id},{restaurantName:1,profile:1,latitude:1,longitude:1})
     res.status(200).json({message:'Successfully fetched',name:name})
 }
 
@@ -124,8 +124,9 @@ const getMenu = async(req,res)=>{
 
         const restaurant = await restaurantCollection.findById(id)
         const menu = await menuCollection.find({restaurantId:id})
+        const totalCount = await menuCollection.countDocuments({ restaurantId: id })
 
-        res.status(200).json({restaurant:restaurant,menu:menu})
+        res.status(200).json({restaurant:restaurant,menu:menu,totalCount})
     } catch (error) {
 
         console.log(error);
@@ -133,29 +134,35 @@ const getMenu = async(req,res)=>{
     }
 }
 
-const editMenu = async(req,res)=>{
-    try {
-        
-        const menuData = req.body.formData
-        const menu = JSON.parse(menuData)
-        const {menuId} =req.body
+const editMenu = async (req, res) => {
+  try {
+      const file = req.file.filename
+      console.log(file);
+      const menuName = req.body.menuName;
+      const description = req.body.description;
+      const category = req.body.category;
+      const price = req.body.price;
+      const menuId = req.body.menuId;
 
-        await menuCollection.findOneAndUpdate(
-            {_id:menuId},
-            {menuName:menu.menuName,
-            description:menu.description,
-            price:menu.price,
-            category:menu.category}
-        )
+      await menuCollection.findOneAndUpdate(
+          { _id: menuId },
+          {
+              $set: {
+                  menuName: menuName,
+                  description: description,
+                  price: price,
+                  category: category,
+                  image: file
+              }
+          }
+      );
 
-        const menus = await menuCollection.findById(menuId)
-
-        res.status(200).json({message:'Menu edited successfully'})
-    } catch (error) {
-
-        console.log(error);
-    }
-}
+      res.status(200).json({ message: 'Menu edited successfully' });
+  } catch (error) {
+      console.log(error);
+      res.status(500).json({ message: 'Error editing menu' });
+  }
+};
 
 const getOrders = async (req, res) => {
     try {
@@ -173,7 +180,9 @@ const getOrders = async (req, res) => {
                     paymentMethod: { $first: "$paymentMethod" },
                     addressId: { $first: "$addressId" },
                     status:{$first:'$status'},
-                    orderDate: { $first: "$orderDate" }
+                    orderDate: { $first: "$orderDate" },
+                    userEmail:{$first:"$userEmail"},
+                    rejectedReason:{$first:"$rejectedReason"}
                 }
             }
         ]);
@@ -347,6 +356,12 @@ const assignOrder = async (req, res) => {
             { $push: { order: data }, status: 'assigned' },
             { new: true } 
           );
+
+          await orderCollection.findByIdAndUpdate(
+            orderId,
+            { $set: { agentId: agent._id, agentName: agent.username, agentMobile: agent.mobile,agentEmail:agent.email  } },
+            { new: true } 
+          );
   
           if (result) {
             assignedAgent = result;
@@ -366,7 +381,19 @@ const assignOrder = async (req, res) => {
       res.status(500).json({ message: 'Internal server error' });
     }
   };
+
+  getReviews = async(req,res)=>{
+    try {
+      
+      const {id} = req.body
+      const reviews = await reviewCollection.find({restId:id})
+      res.status(200).json({reviews:reviews})
+
+    } catch (error) {
+      console.log(error);
+    }
+  }
   
   
 
-module.exports = restaurantController = {getName,getData,editData,editImage,addMenu,getLocation,getAgents,getMenu,editMenu,getOrders,updateReason,acceptOrder,filterOrders,assignOrder,pickUp}
+module.exports = restaurantController = {getName,getReviews,getData,editData,editImage,addMenu,getLocation,getAgents,getMenu,editMenu,getOrders,updateReason,acceptOrder,filterOrders,assignOrder,pickUp}

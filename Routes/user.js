@@ -29,5 +29,7 @@ router.post('/add-wallet',userController.addWallet)
 router.post('/change-password',userController.changePassword)
 router.post('/edit-profile',userController.editProfile)
 router.get('/search-restaurant/:item',userController.searchRestaurant)
+router.post('/add-review',userToken.isUserAuth,userController.addReview)
+
 
 module.exports = router;

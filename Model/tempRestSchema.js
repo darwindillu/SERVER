@@ -29,6 +29,12 @@ const tempRestaurantSchema= mongoose.Schema({
     password:{
         type:String
     },
+    latitude:{
+        type:Number
+    },
+    longitude:{
+        type:Number
+    },
     otp:{
         type:Number,
     },

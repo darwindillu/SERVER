@@ -11,5 +11,7 @@ router.post('/reject-order',agentToken.isAgentAuth,agentController.rejectOrder)
 router.post('/pick-orders',agentToken.isAgentAuth,agentController.pickOrder)
 router.post('/deliver-orders',agentToken.isAgentAuth,agentController.deliverOrder)
 router.post('/filter-orders',agentToken.isAgentAuth,agentController.filteredOrders)
+router.post('/get-reviews',agentToken.isAgentAuth,agentController.getReviews)
+
 
 module.exports = router

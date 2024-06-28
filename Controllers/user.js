@@ -13,6 +13,7 @@ const billingCollection = require('../Model/billingModel');
 const orderCollection = require('../Model/orderSchema');
 const env = require('dotenv').config()
 const Razorpay = require('razorpay')
+const reviewCollection = require('../Model/reviewSchema')
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAYKEY,
@@ -79,7 +80,8 @@ const postSignup = async (req, res) => {
 
 const postRestaurantSignup = async (req, res) => {
   try {
-      const { user } = req.body;
+      const { user,latitude,longitude } = req.body;
+      console.log(latitude,longitude);
       const email = await restaurantCollection.findOne({email:user.email})
 
       if(email){
@@ -107,6 +109,8 @@ const postRestaurantSignup = async (req, res) => {
           pincode:user.pincode,
           openingTime:user.openingTime,
           password: hashedPassword,
+          latitude:latitude,
+          longitude:longitude,
           otp:otp
       };
 
@@ -222,7 +226,7 @@ const postLogin = async (req, res) => {
        default: 
         break;
     }
-    const existingEmail = await collection.findOne({ email: user.email });
+    const existingEmail = await collection.findOne({ email: user.email,role:role });
 
     if (!existingEmail) {
       return res.status(404).json({ message:'User Not Found' });
@@ -232,7 +236,7 @@ const postLogin = async (req, res) => {
     const passwordMatch = await bcrypt.compare(enteredPassword, existingEmail.password);
 
     if (!passwordMatch) {
-      return res.status(401).json({ message: 'Incorrect Password' });
+      return res.status(401).json({ message: 'Incorrect Password',role:role });
     }
 
     const payload = {
@@ -474,12 +478,6 @@ const addBillingAddress = async(req,res)=>{
   try {
     const {userId,billingAddress} = req.body
 
-    const existingBilling = await billingCollection.find({userId:userId})
-
-    if(existingBilling.length > 0){
-      return res.status(304).json({message:'Already existed'})
-    }
-
     const billingData = {
       firstName:billingAddress.firstName,
       lastName:billingAddress.lastName,
@@ -513,8 +511,8 @@ const getAddress = async(req,res)=>{
 const deleteAddress = async(req,res)=>{
   try {
     
-    const {userId} = req.body
-    await billingCollection.deleteOne({_id:userId})
+    const {Id} = req.body
+    await billingCollection.deleteOne({_id:Id})
     res.status(200).json({message:'Deleted successfully'})
   } catch (error) {
     console.log(error);
@@ -539,15 +537,26 @@ const proceed = async(req,res)=>{
       restId:item.restId
       })
     )
+    const restauarant = await restaurantCollection.findById(items[0].restId)
+    console.log(restauarant);
 
     if(method === 'cashOnDelivery'){
 
-        const currentDate = new Date(Date.now())
-        const year = currentDate.getFullYear()
-        const month = currentDate.getMonth() + 1
-        const day = currentDate.getDate()
-        const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-       
+      const currentDate = new Date();
+      const year = currentDate.getFullYear();
+      const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = currentDate.getDate().toString().padStart(2, '0');
+      const hours = currentDate.getHours().toString().padStart(2, '0');
+      const minutes = currentDate.getMinutes().toString().padStart(2, '0');
+      const seconds = currentDate.getSeconds().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+
+      let formattedHours = hours % 12;
+      formattedHours = formattedHours ? formattedHours : 12; 
+
+      const formattedDate = `${day}-${month}-${year} ${formattedHours}:${minutes}:${seconds} ${ampm}`;
+      console.log(formattedDate);
+
       const orderData = {
         userId:userId,
         addressId:addressId,
@@ -557,8 +566,14 @@ const proceed = async(req,res)=>{
         userLatitude:user.latitude,
         userLongitude:user.longitude,
         orderDate:formattedDate,
-        restId:items.restId
+        restId:items[0].restId,
+        restName:restauarant.restaurantName,
+        userEmail:user.email,
+        userName:user.username,
+        userMobile:user.mobile,
+        restImage:restauarant.profile
       }
+      console.log(orderData);
   
      await orderCollection.insertMany([orderData])
      await cartCollection.deleteMany({userId:userId})
@@ -574,11 +589,20 @@ const proceed = async(req,res)=>{
          return res.status(300).json({message:'Insufficient Balance'})
        }
 
-        const currentDate = new Date(Date.now())
-        const year = currentDate.getFullYear()
-        const month = currentDate.getMonth() + 1
-        const day = currentDate.getDate()
-        const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+       const currentDate = new Date();
+       const year = currentDate.getFullYear();
+       const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+       const day = currentDate.getDate().toString().padStart(2, '0');
+       const hours = currentDate.getHours().toString().padStart(2, '0');
+       const minutes = currentDate.getMinutes().toString().padStart(2, '0');
+       const seconds = currentDate.getSeconds().toString().padStart(2, '0');
+       const ampm = hours >= 12 ? 'PM' : 'AM';
+
+       let formattedHours = hours % 12;
+       formattedHours = formattedHours ? formattedHours : 12; 
+
+       const formattedDate = `${day}-${month}-${year} ${formattedHours}:${minutes}:${seconds} ${ampm}`;
+       console.log(formattedDate);
 
        const orderData = {
         userId:userId,
@@ -589,7 +613,12 @@ const proceed = async(req,res)=>{
         userLatitude:user.latitude,
         userLongitude:user.longitude,
         orderDate:formattedDate,
-        restId:items.restId
+        restId:items[0].restId,
+        restName:restauarant.restaurantName,
+        userEmail:user.email,
+        userName:user.username,
+        userMobile:user.mobile,
+        restImage:restauarant.profile
        }
 
        await orderCollection.insertMany([orderData])
@@ -661,11 +690,22 @@ const razorpaySuccess = async(req,res)=>{
         })
       )
 
-        const currentDate = new Date(Date.now())
-        const year = currentDate.getFullYear()
-        const month = currentDate.getMonth() + 1
-        const day = currentDate.getDate()
-        const formattedDate = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+      const restaurant = await restaurantCollection.findById(items[0].restId)
+
+        const currentDate = new Date();
+       const year = currentDate.getFullYear();
+       const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+       const day = currentDate.getDate().toString().padStart(2, '0');
+       const hours = currentDate.getHours().toString().padStart(2, '0');
+       const minutes = currentDate.getMinutes().toString().padStart(2, '0');
+       const seconds = currentDate.getSeconds().toString().padStart(2, '0');
+       const ampm = hours >= 12 ? 'PM' : 'AM';
+
+       let formattedHours = hours % 12;
+       formattedHours = formattedHours ? formattedHours : 12; 
+
+       const formattedDate = `${day}-${month}-${year} ${formattedHours}:${minutes}:${seconds} ${ampm}`;
+       console.log(formattedDate);
 
       const orderData = {
         userId:userId,
@@ -677,7 +717,12 @@ const razorpaySuccess = async(req,res)=>{
         userLatitude:user.latitude,
         userLongitude:user.longitude,
         orderDate:formattedDate,
-        restId:items.restId
+        restId:items[0].restId,
+        restName:restaurant.restaurantName,
+        userEmail:user.email,
+        userName:user.username,
+        userMobile:user.mobile,
+        restImage:restaurant.profile
        }
 
        await orderCollection.insertMany([orderData])
@@ -806,4 +851,63 @@ const searchRestaurant = async(req,res)=>{
   }
 }
 
-module.exports = userController = {postSignup,postRestaurantSignup,verifyOtp,resendOtp,postLogin,verifyEmail,resetPassword,postReset,getMenu,addToCart,getCart,removeCart,updateQuantity,addLocation,addBillingAddress,getAddress,deleteAddress,proceed,generateId,razorpaySuccess,getProfileData,getOrderData,addWallet,changePassword,editProfile,searchRestaurant}
+const addReview = async(req,res)=>{
+  try {
+    
+    const {id,review,role,userId} = req.body
+
+    const user = await userCollection.findById(userId)
+
+    if(role==='restaurant'){
+
+      const reviews = await reviewCollection.find({userId:userId,roleRestaurant:1})
+      console.log(reviews);
+
+      if(reviews.length!==0){
+        return res.status(300).json({message:'Already reviewed'})
+      }
+      
+
+      const data = {
+        restId:id,
+        review:review,
+        userId:userId,
+        userName:user.username.toUpperCase(),
+        userEmail:user.email,
+        userMobile:user.mobile,
+        roleRestaurant:true
+      }
+
+      await reviewCollection.insertMany([data])
+    }
+
+    if(role==='agent'){
+      
+      const reviews = await reviewCollection.find({userId:userId,roleAgent:1})
+      console.log(reviews);
+
+      if(reviews.length!==0){
+        return res.status(300).json({message:'Already reviewed'})
+      }
+
+      const data = {
+        agentId:id,
+        review:review,
+        userId:userId,
+        userName:user.username.toUpperCase(),
+        userEmail:user.email,
+        userMobile:user.mobile,
+        roleAgent:true
+      }
+
+      await reviewCollection.insertMany([data])
+    }
+
+    res.status(200).json({message:'review added successfully'})
+
+  } catch (error) {
+    console.log(error);
+  }
+ }
+
+module.exports = userController = {postSignup,postRestaurantSignup,verifyOtp,resendOtp,postLogin,verifyEmail,resetPassword,postReset,getMenu,addToCart,getCart,removeCart,updateQuantity,addLocation,addBillingAddress,getAddress,deleteAddress,proceed,generateId,razorpaySuccess,getProfileData,getOrderData,addWallet,changePassword,editProfile,searchRestaurant,addReview}

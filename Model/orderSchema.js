@@ -8,6 +8,15 @@ const orderSchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'user'
     },
+    userEmail:{
+        type:String
+    },
+    userName:{
+        type:String
+    },
+    userMobile:{
+        type:String
+    },
     items: [{
         menuId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -43,7 +52,7 @@ const orderSchema = mongoose.Schema({
         default:30
     },
     orderDate: {
-        type: Date,
+        type: String,
     },
     rejectedReason:{
         type:String
@@ -63,6 +72,15 @@ const orderSchema = mongoose.Schema({
     agentId:{
         type: mongoose.Schema.Types.ObjectId,
         ref:'agent'
+    },
+    agentEmail:{
+        type:String
+    },
+    agentName:{
+        type:String
+    },
+    agentMobile:{
+        type:Number
     },
     status:{
         type:String,
@@ -90,7 +108,11 @@ const orderSchema = mongoose.Schema({
     restId:{
         type:mongoose.Schema.Types.ObjectId,
         ref:'rest'
-    }
+    },
+    restName:{
+        type:String
+    },
+
   },
   {
     timestamps:true
